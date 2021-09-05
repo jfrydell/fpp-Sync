@@ -508,7 +508,7 @@ public:
     void registerApis(httpserver::webserver *m_ws) {
         //at this point, most of FPP is up and running, we can register our MultiSync plugin
         if (enabled && plugin->Init()) {
-            if (getFPPmode() == MASTER_MODE) {
+            if (getFPPmode() == PLAYER_MODE) {
                 //only register the sender for master mode
                 multiSync->addMultiSyncPlugin(plugin);
             }
