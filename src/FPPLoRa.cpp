@@ -1,3 +1,5 @@
+#include <fpp-pch.h>
+
 #include <fstream>
 #include <sstream>
 #include <string>
@@ -173,7 +175,7 @@ public:
         }
         return true;
     }
-    virtual void ShutdownSync(void) {
+    virtual void ShutdownSync(void) override {
         if (devFile >= 0) {
             SerialClose(devFile);
             devFile = -1;
@@ -217,7 +219,7 @@ public:
         lastFrame = frames;
     }
 
-    virtual void SendSeqOpenPacket(const std::string &filename) {
+    virtual void SendSeqOpenPacket(const std::string &filename) override {
         char buf[256];
         strcpy(&buf[1], filename.c_str());
         buf[0] = SET_SEQUENCE_NAME;
@@ -227,7 +229,7 @@ public:
         lastSentTime = -1.0f;
         lastSentFrame = -1;
     }
-    virtual void SendSeqSyncStartPacket(const std::string &filename) {
+    virtual void SendSeqSyncStartPacket(const std::string &filename) override {
         if (filename != lastSequence) {
             SendSeqOpenPacket(filename);
         }
@@ -238,7 +240,7 @@ public:
         lastSentTime = -1.0f;
         lastSentFrame = -1;
     }
-    virtual void SendSeqSyncStopPacket(const std::string &filename) {
+    virtual void SendSeqSyncStopPacket(const std::string &filename) override {
         char buf[2];
         buf[0] = STOP_SEQUENCE;
         send(buf, 1);
@@ -247,14 +249,14 @@ public:
         lastSentTime = -1.0f;
         lastSentFrame = -1;
     }
-    virtual void SendSeqSyncPacket(const std::string &filename, int frames, float seconds) {
+    virtual void SendSeqSyncPacket(const std::string &filename, int frames, float seconds) override {
         if (filename != lastSequence) {
             SendSeqSyncStartPacket(filename);
         }
         SendSync(frames, seconds);
     }
     
-    virtual void SendMediaOpenPacket(const std::string &filename)  {
+    virtual void SendMediaOpenPacket(const std::string &filename) override {
         if (sendMediaSync) {
             char buf[256];
             strcpy(&buf[1], filename.c_str());
@@ -266,7 +268,7 @@ public:
             lastSentFrame = -1;
         }
     }
-    virtual void SendMediaSyncStartPacket(const std::string &filename) {
+    virtual void SendMediaSyncStartPacket(const std::string &filename) override {
         if (sendMediaSync) {
             if (filename != lastMedia) {
                 SendSeqOpenPacket(filename);
@@ -279,7 +281,7 @@ public:
             lastSentFrame = -1;
         }
     }
-    virtual void SendMediaSyncStopPacket(const std::string &filename) {
+    virtual void SendMediaSyncStopPacket(const std::string &filename) override {
         if (sendMediaSync) {
             char buf[2];
             buf[0] = STOP_MEDIA;
@@ -290,7 +292,7 @@ public:
             lastSentFrame = -1;
         }
     }
-    virtual void SendMediaSyncPacket(const std::string &filename, float seconds) {
+    virtual void SendMediaSyncPacket(const std::string &filename, float seconds) override {
         if (sendMediaSync) {
             if (filename != lastMedia) {
                 SendMediaSyncStartPacket(filename);
@@ -299,7 +301,7 @@ public:
         }
     }
     
-    virtual void SendBlankingDataPacket(void) {
+    virtual void SendBlankingDataPacket(void) override {
         char buf[2];
         buf[0] = BLANK;
         send(buf, 1);
@@ -451,8 +453,8 @@ public:
 
     bool loadSettings() {
         bool enabled = false;
-        if (FileExists("/home/fpp/media/config/plugin.fpp-LoRa")) {
-            std::ifstream infile("/home/fpp/media/config/plugin.fpp-LoRa");
+        if (FileExists(FPP_DIR_CONFIG("/plugin.fpp-LoRa"))) {
+            std::ifstream infile(FPP_DIR_CONFIG("/plugin.fpp-LoRa"));
             std::string line;
             while (std::getline(infile, line)) {
                 std::istringstream iss(line);
