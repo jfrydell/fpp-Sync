@@ -60,12 +60,15 @@ public:
         serverLatency[0] = server_delay;
     }
 
-    void send(char *buf, CURL* curl = nullptr) {
-        if (!curl) curl = curl_easy_init();
+    void send(Json::Value &req) {
+        CURL* curl = curl_easy_init();
         if (curl) {
+            std::string body = SaveJsonToString(req, std::string());
+            LogDebug(VB_SYNC, "Sending: %s\n", body.c_str());
             curl_easy_setopt(curl, CURLOPT_URL, "192.168.168.230:9000");
             curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
-            curl_easy_setopt(curl, CURLOPT_COPYPOSTFIELDS, buf);
+            curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, body.length());
+            curl_easy_setopt(curl, CURLOPT_COPYPOSTFIELDS, body.c_str());
             CurlManager::INSTANCE.addCURL(curl, std::bind(&SyncMultiSyncPlugin::callback, this, std::placeholders::_1));
         } else {
             LogErr(VB_SYNC, "CURL init failed\n");
@@ -77,24 +80,26 @@ public:
         float diffT = seconds - lastSentTime;
         if (diffT > 0.5 || diffT < 0.0) {
             // It's been 0.5 seconds, send a sync request
-            char buf[128];
-            sprintf(buf, "type=sync&id=%d&time=%f&l1=%f&l2=%f&l3=%f", lastMediaId, seconds, serverLatency[0], serverLatency[1], serverLatency[2]);
-            send(buf);
+            Json::Value req;
+            req["type"] = "sync";
+            req["id"] = lastMediaId;
+            req["time"] = seconds;
+            Json::Value &latencies = req["latencies"];
+            latencies.resize(3);
+            latencies[0] = serverLatency[0];
+            latencies[1] = serverLatency[1];
+            latencies[2] = serverLatency[2];
+            send(req);
             lastSentTime = seconds;
         }
     }
     
     virtual void SendMediaOpenPacket(const std::string &filename) override {
-        CURL *curl;
-        curl = curl_easy_init();
-        if (!curl) {
-            LogErr(VB_SYNC, "CURL init failed\n");
-        }
-        char* filename_enc = curl_easy_escape(curl, filename.c_str(), filename.length());
-        char buf[1024];
-        sprintf(buf, "type=media_start&id=%d&filename=%s", lastMediaId, filename_enc);
-        curl_free(filename_enc);
-        send(buf);
+        Json::Value req;
+        req["type"] = "media_start";
+        req["id"] = lastMediaId;
+        req["filename"] = filename;
+        send(req);
         lastMedia = filename;
         lastMediaId++;
         lastSentTime = -1.0f;
@@ -107,9 +112,10 @@ public:
         SendSync(0.0f);
     }
     virtual void SendMediaSyncStopPacket(const std::string &filename) override {
-        char buf[64];
-        sprintf(buf, "type=media_stop&id=%d", lastMediaId);
-        send(buf);
+        Json::Value req;
+        req["type"] = "media_stop";
+        req["id"] = lastMediaId;
+        send(req);
         lastMedia = "";
         lastMediaId++;
         lastSentTime = -1.0f;
