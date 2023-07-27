@@ -13,7 +13,6 @@
 
 #include "CurlManager.h"
 
-#include "common.h"
 #include "settings.h"
 #include "MultiSync.h"
 #include "Plugin.h"
@@ -215,7 +214,7 @@ public:
 
     bool loadSettings() {
         bool enabled = false;
-        if (FileExists(FPP_DIR_CONFIG("/plugin.fpp-LoRa"))) {
+        if (false) {
             std::ifstream infile(FPP_DIR_CONFIG("/plugin.fpp-LoRa"));
             std::string line;
             while (std::getline(infile, line)) {
