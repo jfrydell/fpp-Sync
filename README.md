@@ -1,6 +1,6 @@
-# fpp-LoRa
+# fpp-Sync
 
-Support for super long range MultiSync by using LoRa UART based modules. 
+Support for super long range MultiSync by using Sync UART based modules. 
 
 
 

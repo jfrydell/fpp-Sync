@@ -19,13 +19,13 @@ $menuEntries = Array(
 #		'wrap' => 1
 #	),
 	Array(
-		'text' => 'LoRa Configuration',
+		'text' => 'Sync Configuration',
 		'type' => 'content',
 		'page' => 'content.php',
 		'wrap' => 1
 	),
 	Array(
-		'text' => 'LoRa - About',
+		'text' => 'Sync - About',
 		'type' => 'help',
 		'page' => 'about.php',
 		'wrap' => 1

@@ -1,4 +1,4 @@
 #!/bin/bash
 
-# fpp-LoRa uninstall script
+# fpp-Sync uninstall script
 

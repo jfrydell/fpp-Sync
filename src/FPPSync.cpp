@@ -41,11 +41,11 @@ void callback(CURL* curl) {
     LogWarn(VB_SYNC, "CURL callback!");
 }
 
-class LoRaMultiSyncPlugin : public MultiSyncPlugin  {
+class SyncMultiSyncPlugin : public MultiSyncPlugin  {
 public:
     
-    LoRaMultiSyncPlugin() {}
-    virtual ~LoRaMultiSyncPlugin() {}
+    SyncMultiSyncPlugin() {}
+    virtual ~SyncMultiSyncPlugin() {}
 
     bool Init() {
         LogWarn(VB_SYNC, "Started thing!");
@@ -217,8 +217,8 @@ public:
 
     bool loadSettings() {
         bool enabled = false;
-        if (FileExists(FPP_DIR_CONFIG("/plugin.fpp-LoRa"))) {
-            std::ifstream infile(FPP_DIR_CONFIG("/plugin.fpp-LoRa"));
+        if (FileExists(FPP_DIR_CONFIG("/plugin.fpp-Sync"))) {
+            std::ifstream infile(FPP_DIR_CONFIG("/plugin.fpp-Sync"));
             std::string line;
             while (std::getline(infile, line)) {
                 std::istringstream iss(line);
@@ -226,7 +226,7 @@ public:
                 if (!(iss >> a >> b >> c)) { break; } // error
                 
                 c.erase(std::remove( c.begin(), c.end(), '\"' ), c.end());
-                if (a == "LoRaEnable") {
+                if (a == "SyncEnable") {
                     enabled = (c == "1");
                 }
             }
@@ -248,15 +248,15 @@ public:
 };
 
 
-class LoRaFPPPlugin : public FPPPlugin {
+class SyncFPPPlugin : public FPPPlugin {
 public:
-    LoRaMultiSyncPlugin *plugin = new LoRaMultiSyncPlugin();
+    SyncMultiSyncPlugin *plugin = new SyncMultiSyncPlugin();
     bool enabled = false;
     
-    LoRaFPPPlugin() : FPPPlugin("LoRa") {
+    SyncFPPPlugin() : FPPPlugin("Sync") {
         enabled = plugin->loadSettings();
     }
-    virtual ~LoRaFPPPlugin() {}
+    virtual ~SyncFPPPlugin() {}
     
     void registerApis(httpserver::webserver *m_ws) {
         //at this point, most of FPP is up and running, we can register our MultiSync plugin
@@ -272,6 +272,6 @@ public:
 
 extern "C" {
     FPPPlugin *createPlugin() {
-        return new LoRaFPPPlugin();
+        return new SyncFPPPlugin();
     }
 }

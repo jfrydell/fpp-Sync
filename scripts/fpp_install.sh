@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# fpp-LoRa install script
+# fpp-Sync install script
 
 BASEDIR=$(dirname $0)
 cd $BASEDIR

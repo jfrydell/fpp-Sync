@@ -1,6 +1,6 @@
 #!/bin/sh
 
-echo "Running fpp-LoRa PreStart Script"
+echo "Running fpp-Sync PreStart Script"
 
 BASEDIR=$(dirname $0)
 cd $BASEDIR
