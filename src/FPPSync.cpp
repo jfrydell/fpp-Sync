@@ -60,14 +60,15 @@ public:
         serverLatency[0] = server_delay;
     }
 
-    void send(char *buf) {
-        CURL *curl;
-        curl = curl_easy_init();
+    void send(char *buf, CURL* curl = nullptr) {
+        if (!curl) curl = curl_easy_init();
         if (curl) {
             curl_easy_setopt(curl, CURLOPT_URL, "192.168.168.230:9000");
             curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
             curl_easy_setopt(curl, CURLOPT_COPYPOSTFIELDS, buf);
             CurlManager::INSTANCE.addCURL(curl, std::bind(&SyncMultiSyncPlugin::callback, this, std::placeholders::_1));
+        } else {
+            LogErr(VB_SYNC, "CURL init failed\n");
         }
     }
     
@@ -84,6 +85,11 @@ public:
     }
     
     virtual void SendMediaOpenPacket(const std::string &filename) override {
+        CURL *curl;
+        curl = curl_easy_init();
+        if (!curl) {
+            LogErr(VB_SYNC, "CURL init failed\n");
+        }
         char* filename_enc = curl_easy_escape(curl, filename.c_str(), filename.length());
         char buf[1024];
         sprintf(buf, "type=media_start&id=%d&filename=%s", lastMediaId, filename_enc);
@@ -102,7 +108,7 @@ public:
     }
     virtual void SendMediaSyncStopPacket(const std::string &filename) override {
         char buf[64];
-        sprintf(f, "type=media_stop&id=%d", lastMediaId);
+        sprintf(buf, "type=media_stop&id=%d", lastMediaId);
         send(buf);
         lastMedia = "";
         lastMediaId++;
