@@ -100,11 +100,10 @@ public:
     virtual void SendMediaOpenPacket(const std::string &filename) override {
         Json::Value req;
         req["type"] = "media_start";
-        req["id"] = lastMediaId;
+        req["id"] = ++lastMediaId;
         req["filename"] = filename;
         send(req);
         lastMedia = filename;
-        lastMediaId++;
         lastSentTime = -1.0f;
     }
     virtual void SendMediaSyncStartPacket(const std::string &filename) override {
@@ -117,10 +116,9 @@ public:
     virtual void SendMediaSyncStopPacket(const std::string &filename) override {
         Json::Value req;
         req["type"] = "media_stop";
-        req["id"] = lastMediaId;
+        req["id"] = ++lastMediaId;
         send(req);
         lastMedia = "";
-        lastMediaId++;
         lastSentTime = -1.0f;
     }
     virtual void SendMediaSyncPacket(const std::string &filename, float seconds) override {
