@@ -228,7 +228,7 @@ public:
                 }
             }
         }
-        return enabled;
+        return true;
     }
 
     std::string lastSequence;
