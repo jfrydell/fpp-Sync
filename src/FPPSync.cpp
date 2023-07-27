@@ -67,6 +67,9 @@ public:
             LogDebug(VB_SYNC, "Sending: %s\n", body.c_str());
             curl_easy_setopt(curl, CURLOPT_URL, "192.168.168.230:9000");
             curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+            struct curl_slist *hs = NULL;
+            hs = curl_slist_append(hs, "Content-Type: application/json");
+            curl_easy_setopt(curl, CURLOPT_HTTPHEADER, hs);
             curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, body.length());
             curl_easy_setopt(curl, CURLOPT_COPYPOSTFIELDS, body.c_str());
             CurlManager::INSTANCE.addCURL(curl, std::bind(&SyncMultiSyncPlugin::callback, this, std::placeholders::_1));
