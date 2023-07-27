@@ -1,10 +1,9 @@
 #include <fpp-pch.h>
 
-#include <fstream>
-#include <sstream>
 #include <string>
 #include <algorithm>
 #include <cstring>
+#include <functional>
 
 #include <unistd.h>
 #include <termios.h>
@@ -23,24 +22,6 @@
 #include "Sequence.h"
 #include "log.h"
 
-
-enum {
-    SET_SEQUENCE_NAME = 1,
-    SET_MEDIA_NAME    = 2,
-
-    START_SEQUENCE    = 3,
-    START_MEDIA       = 4,
-    STOP_SEQUENCE     = 5,
-    STOP_MEDIA        = 6,
-    SYNC              = 7,
-    
-    BLANK             = 9
-};
-
-void callback(CURL* curl) {
-    LogWarn(VB_SYNC, "CURL callback!\n");
-}
-
 class SyncMultiSyncPlugin : public MultiSyncPlugin  {
 public:
     
@@ -48,171 +29,90 @@ public:
     virtual ~SyncMultiSyncPlugin() {}
 
     bool Init() {
-        LogWarn(VB_SYNC, "Started thing!\n");
+        LogInfo(VB_SYNC, "Started web sync plugin\n");
         return true;
     }
 
-    void send(char *buf, int len) {
-        LogWarn(VB_SYNC, "Sending data WOW!\n");
+    void callback(CURL* curl) {
+        // Check response code
+        long response_code = 0;
+        curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
+        if (response_code != 200) {
+            LogWarn(VB_SYNC, "CURL callback: response code %ld\n", response_code);
+            return;
+        }
+
+        // Estimate time between our send and server receive (includes all of APPCONNECT and half of TOTAL_TIME after that)
+        double connect_time = 0.0;
+        curl_easy_getinfo(curl, CURLINFO_APPCONNECT_TIME, &connect_time);
+        double total_time = 0.0;
+        curl_easy_getinfo(curl, CURLINFO_TOTAL_TIME, &total_time);
+        double server_delay = (total_time + connect_time) / 2.0;
+        if (server_delay <= 0.0) {
+            LogWarn(VB_SYNC, "CURL callback: server delay %f\n", server_delay);
+            return;
+        }
+        LogDebug(VB_SYNC, "Estimated CURL latency: %f\n", server_delay);
+
+        // Update latest latencies
+        serverLatency[2] = serverLatency[1];
+        serverLatency[1] = serverLatency[0];
+        serverLatency[0] = server_delay;
+    }
+
+    void send(char *buf) {
         CURL *curl;
         curl = curl_easy_init();
-        if(curl) {
+        if (curl) {
             curl_easy_setopt(curl, CURLOPT_URL, "192.168.168.230:9000");
             curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
-            curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, len);
             curl_easy_setopt(curl, CURLOPT_COPYPOSTFIELDS, buf);
-            CurlManager::INSTANCE.addCURL(curl, callback);
+            CurlManager::INSTANCE.addCURL(curl, std::bind(&SyncMultiSyncPlugin::callback, this, std::placeholders::_1));
         }
     }
     
-    void SendSync(uint32_t frames, float seconds) {
-        int diff = frames - lastSentFrame;
+    void SendSync(float seconds) {
+        LogDebug(VB_SYNC, "SendSync: %f\n", seconds);
         float diffT = seconds - lastSentTime;
-        bool sendSync = false;
-        if (diffT > 0.5) {
-            sendSync = true;
-        } else if (!frames) {
-            // no need to send the 0 frame
-        } else if (frames < 32) {
-            //every 8 at the start
-            if (frames % 8 == 0) {
-                sendSync = true;
-            }
-        } else if (diff == 16) {
-            sendSync = true;
-        }
-        
-        if (sendSync) {
-            char buf[120];
-            buf[0] = SYNC;
-            memcpy(&buf[1], &frames, 4);
-            memcpy(&buf[5], &seconds, 4);
-            send(buf, 9);
-
-            lastSentFrame = frames;
+        if (diffT > 0.5 || diffT < 0.0) {
+            // It's been 0.5 seconds, send a sync request
+            char buf[128];
+            sprintf(buf, "type=sync&id=%d&time=%f&l1=%f&l2=%f&l3=%f", lastMediaId, seconds, serverLatency[0], serverLatency[1], serverLatency[2]);
+            send(buf);
             lastSentTime = seconds;
         }
-        lastFrame = frames;
-    }
-
-    virtual void SendSeqOpenPacket(const std::string &filename) override {
-        char buf[256];
-        strcpy(&buf[1], filename.c_str());
-        buf[0] = SET_SEQUENCE_NAME;
-        send(buf, filename.length() + 2);
-        lastSequence = filename;
-        lastFrame = -1;
-        lastSentTime = -1.0f;
-        lastSentFrame = -1;
-    }
-    virtual void SendSeqSyncStartPacket(const std::string &filename) override {
-        if (filename != lastSequence) {
-            SendSeqOpenPacket(filename);
-        }
-        char buf[2];
-        buf[0] = START_SEQUENCE;
-        send(buf, 1);
-        lastFrame = -1;
-        lastSentTime = -1.0f;
-        lastSentFrame = -1;
-    }
-    virtual void SendSeqSyncStopPacket(const std::string &filename) override {
-        char buf[2];
-        buf[0] = STOP_SEQUENCE;
-        send(buf, 1);
-        lastSequence = "";
-        lastFrame = -1;
-        lastSentTime = -1.0f;
-        lastSentFrame = -1;
-    }
-    virtual void SendSeqSyncPacket(const std::string &filename, int frames, float seconds) override {
-        if (filename != lastSequence) {
-            SendSeqSyncStartPacket(filename);
-        }
-        SendSync(frames, seconds);
     }
     
     virtual void SendMediaOpenPacket(const std::string &filename) override {
-        if (sendMediaSync) {
-            char buf[256];
-            strcpy(&buf[1], filename.c_str());
-            buf[0] = SET_MEDIA_NAME;
-            send(buf, filename.length() + 2);
-            lastMedia = filename;
-            lastFrame = -1;
-            lastSentTime = -1.0f;
-            lastSentFrame = -1;
-        }
+        char* filename_enc = curl_easy_escape(curl, filename.c_str(), filename.length());
+        char buf[1024];
+        sprintf(buf, "type=media_start&id=%d&filename=%s", lastMediaId, filename_enc);
+        curl_free(filename_enc);
+        send(buf);
+        lastMedia = filename;
+        lastMediaId++;
+        lastSentTime = -1.0f;
     }
     virtual void SendMediaSyncStartPacket(const std::string &filename) override {
-        if (sendMediaSync) {
-            if (filename != lastMedia) {
-                SendSeqOpenPacket(filename);
-            }
-            char buf[2];
-            buf[0] = START_MEDIA;
-            send(buf, 1);
-            lastFrame = -1;
-            lastSentTime = -1.0f;
-            lastSentFrame = -1;
+        if (filename != lastMedia) {
+            SendSeqOpenPacket(filename);
         }
+        lastSentTime = -1.0f;
+        SendSync(0.0f);
     }
     virtual void SendMediaSyncStopPacket(const std::string &filename) override {
-        if (sendMediaSync) {
-            char buf[2];
-            buf[0] = STOP_MEDIA;
-            send(buf, 1);
-            lastMedia = "";
-            lastFrame = -1;
-            lastSentTime = -1.0f;
-            lastSentFrame = -1;
-        }
+        char buf[64];
+        sprintf(f, "type=media_stop&id=%d", lastMediaId);
+        send(buf);
+        lastMedia = "";
+        lastMediaId++;
+        lastSentTime = -1.0f;
     }
     virtual void SendMediaSyncPacket(const std::string &filename, float seconds) override {
-        if (sendMediaSync) {
-            if (filename != lastMedia) {
-                SendMediaSyncStartPacket(filename);
-            }
-            SendSync(lastFrame > 0 ? lastFrame : 0, seconds);
+        if (filename != lastMedia) {
+            SendMediaOpenPacket(filename);
         }
-    }
-    
-    virtual void SendBlankingDataPacket(void) override {
-        char buf[2];
-        buf[0] = BLANK;
-        send(buf, 1);
-    }
-    
-    bool fullCommandRead(int &commandSize) {
-        if (curPosition == 0) {
-            return false;
-        }
-        switch (readBuffer[0]) {
-        case SET_SEQUENCE_NAME:
-        case SET_MEDIA_NAME:
-            //need null terminated string
-            for (commandSize = 0; commandSize < curPosition; commandSize++) {
-                if (readBuffer[commandSize] == 0) {
-                    commandSize++;
-                    return true;
-                }
-            }
-            return false;
-        case SYNC:
-            commandSize = 9;
-            return curPosition >= 9;
-        case START_SEQUENCE:
-        case START_MEDIA:
-        case STOP_SEQUENCE:
-        case STOP_MEDIA:
-        case BLANK:
-            commandSize = 1;
-            break;
-        default:
-            commandSize = 1;
-            return false;
-        }
-        return true;
+        SendSync(seconds);
     }
 
     bool loadSettings() {
@@ -234,17 +134,10 @@ public:
         return enabled;
     }
 
-    std::string lastSequence;
     std::string lastMedia;
-    bool sendMediaSync = true;
-    int lastFrame = -1;
-    
+    int lastMediaId = 0;
     float lastSentTime = -1.0f;
-    int lastSentFrame = -1;
-    
-    char readBuffer[256];
-    int curPosition = 0;
-
+    double serverLatency[3] = {0, 0, 0};
 };
 
 
