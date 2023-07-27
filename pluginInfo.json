@@ -1,5 +1,5 @@
 {
-	"repoName": "fpp-Time",
+	"repoName": "fpp-Sync",
 	"name": "Time MultiSync Plugin for FPP",
 	"author": "Fletch Rydell (jfrydell)",
 	"description": "This plugin sends MultiSync events to a POST endpoint",
