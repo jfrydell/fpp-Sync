@@ -38,7 +38,7 @@ enum {
 };
 
 void callback(CURL* curl) {
-    LogWarn(VB_SYNC, "CURL callback!");
+    LogWarn(VB_SYNC, "CURL callback!\n");
 }
 
 class SyncMultiSyncPlugin : public MultiSyncPlugin  {
@@ -66,7 +66,6 @@ public:
     }
     
     void SendSync(uint32_t frames, float seconds) {
-        LogWarn(VB_SYNC, "SendSync\n");
         int diff = frames - lastSentFrame;
         float diffT = seconds - lastSentTime;
         bool sendSync = false;
@@ -97,7 +96,6 @@ public:
     }
 
     virtual void SendSeqOpenPacket(const std::string &filename) override {
-        LogWarn(VB_SYNC, "SendSeqOpenPacket\n");
         char buf[256];
         strcpy(&buf[1], filename.c_str());
         buf[0] = SET_SEQUENCE_NAME;
@@ -108,7 +106,6 @@ public:
         lastSentFrame = -1;
     }
     virtual void SendSeqSyncStartPacket(const std::string &filename) override {
-        LogWarn(VB_SYNC, "SendSeqSyncStartPacket\n");
         if (filename != lastSequence) {
             SendSeqOpenPacket(filename);
         }
@@ -120,7 +117,6 @@ public:
         lastSentFrame = -1;
     }
     virtual void SendSeqSyncStopPacket(const std::string &filename) override {
-        LogWarn(VB_SYNC, "SendSeqSyncStopPacket\n");
         char buf[2];
         buf[0] = STOP_SEQUENCE;
         send(buf, 1);
@@ -130,7 +126,6 @@ public:
         lastSentFrame = -1;
     }
     virtual void SendSeqSyncPacket(const std::string &filename, int frames, float seconds) override {
-        LogWarn(VB_SYNC, "SendSeqSyncPacket\n");
         if (filename != lastSequence) {
             SendSeqSyncStartPacket(filename);
         }
@@ -138,7 +133,6 @@ public:
     }
     
     virtual void SendMediaOpenPacket(const std::string &filename) override {
-        LogWarn(VB_SYNC, "SendMediaOpenPacket\n");
         if (sendMediaSync) {
             char buf[256];
             strcpy(&buf[1], filename.c_str());
@@ -151,7 +145,6 @@ public:
         }
     }
     virtual void SendMediaSyncStartPacket(const std::string &filename) override {
-        LogWarn(VB_SYNC, "SendMediaSyncStartPacket\n");
         if (sendMediaSync) {
             if (filename != lastMedia) {
                 SendSeqOpenPacket(filename);
@@ -165,7 +158,6 @@ public:
         }
     }
     virtual void SendMediaSyncStopPacket(const std::string &filename) override {
-        LogWarn(VB_SYNC, "SendMediaSyncStopPacket\n");
         if (sendMediaSync) {
             char buf[2];
             buf[0] = STOP_MEDIA;
@@ -177,7 +169,6 @@ public:
         }
     }
     virtual void SendMediaSyncPacket(const std::string &filename, float seconds) override {
-        LogWarn(VB_SYNC, "SendMediaSyncPacket\n");
         if (sendMediaSync) {
             if (filename != lastMedia) {
                 SendMediaSyncStartPacket(filename);
@@ -187,7 +178,6 @@ public:
     }
     
     virtual void SendBlankingDataPacket(void) override {
-        LogWarn(VB_SYNC, "SendBlankingDataPacket\n");
         char buf[2];
         buf[0] = BLANK;
         send(buf, 1);
