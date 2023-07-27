@@ -1,5 +1,3 @@
-#include <fpp-pch.h>
-
 #include <fstream>
 #include <sstream>
 #include <string>
@@ -11,7 +9,10 @@
 #include <chrono>
 #include <thread>
 
-#include <httpserver.hpp>
+#include <curl/curl.h>
+
+#include "CurlManager.h"
+
 #include "common.h"
 #include "settings.h"
 #include "MultiSync.h"
@@ -19,9 +20,6 @@
 #include "Plugins.h"
 #include "Sequence.h"
 #include "log.h"
-
-#include "channeloutput/serialutil.h"
-#include "fppversion_defines.h"
 
 
 enum {
@@ -37,155 +35,31 @@ enum {
     BLANK             = 9
 };
 
-class LoRaMultiSyncPlugin : public MultiSyncPlugin, public httpserver::http_resource  {
+void callback(CURL* curl) {
+    LogWarn(VB_SYNC, "CURL callback!");
+}
+
+class LoRaMultiSyncPlugin : public MultiSyncPlugin  {
 public:
     
     LoRaMultiSyncPlugin() {}
-    virtual ~LoRaMultiSyncPlugin() {
-        if (devFile >= 0) {
-            SerialClose(devFile);
-            devFile = -1;
-        }
-    }
-    
-    void addUBR(const std::string &UBR, char &f) {
-        if (UBR == "1200")   f |= 0b00000000;
-        if (UBR == "2400")   f |= 0b00001000;
-        if (UBR == "4800")   f |= 0b00010000;
-        if (UBR == "9600")   f |= 0b00011000;
-        if (UBR == "19200")  f |= 0b00100000;
-        if (UBR == "38400")  f |= 0b00101000;
-        if (UBR == "57600")  f |= 0b00110000;
-        if (UBR == "115200") f |= 0b00111000;
-    }
-    void addADR(const std::string &ADR, char &f) {
-        if (ADR == "300")    f |= 0b00000000;
-        if (ADR == "1200")   f |= 0b00000001;
-        if (ADR == "2400")   f |= 0b00000010;
-        if (ADR == "4800")   f |= 0b00000011;
-        if (ADR == "9600")   f |= 0b00000100;
-        if (ADR == "19200")  f |= 0b00000101;
-    }
-
-    int sendCommand(int sdevFile, char *buf, int sendLen, int expRead) {
-        int w = write(sdevFile, buf, sendLen);
-        tcdrain(sdevFile);
-        int i = read(sdevFile, buf, expRead);
-        int count = 0;
-        int total = i;
-        while (i >= 0 && count < 1000 && total < expRead) {
-            if (i == 0) {
-                std::this_thread::sleep_for(std::chrono::milliseconds(1));
-                count++;
-            }
-            i = read(sdevFile, &buf[total], expRead - total);
-            if (i > 0) {
-                total += i;
-            }
-        }
-        return total;
-    }
-    
-#if FPP_MAJOR_VERSION >= 4
-    virtual const std::shared_ptr<httpserver::http_response> render_POST(const httpserver::http_request &req) override {
-#else
-    virtual const httpserver::http_response render_POST(const httpserver::http_request &req) override {
-#endif
-        printf("In render_POST\n");
-        
-        std::string MA = req.get_arg("MA");
-        std::string UBR = req.get_arg("UBR");
-        std::string ADR = req.get_arg("ADR");
-        std::string FEC = req.get_arg("FEC");
-        std::string TXP = req.get_arg("TXP");
-        std::string CH = req.get_arg("CH");
-        if (FEC == "") {
-            FEC = "0";
-        }
-        bool reopen = false;
-        if (devFile >= 0) {
-            SerialClose(devFile);
-            devFile = -1;
-            reopen = true;
-        }
-        
-        std::string devFileName = "/dev/" + device;
-        int sdevFile = SerialOpen(devFileName.c_str(), 9600, "8N1", true);
-
-        int id = std::stoi(MA);
-        char buf[256];
-        buf[0] = buf[1] = buf[2] = 0xC1;
-        
-        int w = sendCommand(sdevFile, buf, 3, 6);
-        for (int x = 0; x < w; x++) {
-            printf("C1  %d:  %X\n", x, buf[x]);
-        }
-        
-        buf[0] = 0xC0;
-        buf[1] = (id >> 8) & 0xFF;
-        buf[2] = id & 0xFF;
-        buf[3] = 0b1100'0000;
-        addUBR(UBR, buf[3]);
-        addADR(ADR, buf[3]);
-        buf[4] = std::stoi(CH);
-        
-        buf[5] = 0b0100'0000;
-        if (FEC == "1") {
-            buf[5] |= 0b0000'0100;
-        }
-        if (TXP == "1") {
-            buf[5] |= 0b0000'0011;
-        } else if (TXP == "2") {
-            buf[5] |= 0b0000'0010;
-        } else if (TXP == "3") {
-            buf[5] |= 0b0000'0001;
-        }
-        w = sendCommand(sdevFile, buf, 6, 6);
-        for (int x = 0; x < w; x++) {
-            printf("C0  %d:  %X\n", x, buf[x]);
-        }
-        
-        buf[0] = buf[1] = buf[2] = 0xC1;
-        w = sendCommand(sdevFile, buf, 3, 6);
-        for (int x = 0; x < w; x++) {
-            printf("C1  %d:  %X\n", x, buf[x]);
-        }
-        SerialClose(sdevFile);
-        
-        if (reopen) {
-            Init();
-        }
-        
-#if FPP_MAJOR_VERSION >= 4
-        return std::shared_ptr<httpserver::http_response>(new httpserver::string_response("OK", 200));
-#else
-        return httpserver::http_response_builder("OK", 200);
-#endif
-    }
-    
+    virtual ~LoRaMultiSyncPlugin() {}
 
     bool Init() {
-        std::string devFileName = "/dev/" + device;
-        devFile = SerialOpen(devFileName.c_str(), baud, "8N1", getFPPmode() != REMOTE_MODE);
-        if (devFile < 0) {
-            LogWarn(VB_SYNC, "Could not open %s\n", devFileName.c_str());
-            return false;
-        } else {
-            LogDebug(VB_SYNC, "LoRa Configured - %s    Baud: %d\n", devFileName.c_str(), baud);
-        }
+        LogWarn(VB_SYNC, "Started thing!");
         return true;
-    }
-    virtual void ShutdownSync(void) override {
-        if (devFile >= 0) {
-            SerialClose(devFile);
-            devFile = -1;
-        }
     }
 
     void send(char *buf, int len) {
-        if (devFile >= 0) {
-            write(devFile, buf, len);
-            tcdrain(devFile);
+        LogWarn(VB_SYNC, "Sending data WOW!");
+        CURL *curl;
+        curl = curl_easy_init();
+        if(curl) {
+            curl_easy_setopt(curl, CURLOPT_URL, "192.168.168.230:9000");
+            curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+            curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, len);
+            curl_easy_setopt(curl, CURLOPT_COPYPOSTFIELDS, buf);
+            CurlManager::INSTANCE.addCURL(curl, callback);
         }
     }
     
@@ -338,118 +212,6 @@ public:
         }
         return true;
     }
-    
-    void addControlCallbacks(std::map<int, std::function<bool(int)>> &callbacks) {
-        std::function<bool(int)> fn = [this](int d) {
-            int i = read(devFile, &readBuffer[curPosition], 255-curPosition);
-            if (i) {
-                //printf("CB %d\n", i);
-                curPosition += i;
-                int commandSize = 0;
-                while (fullCommandRead(commandSize)) {
-                    if (readBuffer[0] == SYNC) {
-                        LogExcess(VB_SYNC, "LoRa Callback - %d   (%d bytes of %d)\n", readBuffer[0], commandSize, curPosition);
-                    } else {
-                        LogDebug(VB_SYNC, "LoRa Callback - %d   (%d bytes of %d)\n", readBuffer[0], commandSize, curPosition);
-                    }
-                    switch (readBuffer[0]) {
-                        case SET_SEQUENCE_NAME:
-                            lastSequence = &readBuffer[1];
-                            multiSync->OpenSyncedSequence(&readBuffer[1]);
-                            if (bridgeToLocal) {
-                                multiSync->SendSeqOpenPacket(&readBuffer[1]);
-                            }
-                            break;
-                        case SET_MEDIA_NAME:
-                            lastMedia = &readBuffer[1];
-                            multiSync->OpenSyncedMedia(&readBuffer[1]);
-                            if (bridgeToLocal) {
-                                multiSync->SendMediaOpenPacket(&readBuffer[1]);
-                            }
-                            break;
-                        case START_SEQUENCE:
-                            if (lastSequence != "") {
-                                multiSync->StartSyncedSequence(lastSequence.c_str());
-                                multiSync->SyncSyncedSequence(lastSequence.c_str(), 0, 0);
-                                if (bridgeToLocal) {
-                                    multiSync->SendSeqSyncStartPacket(lastSequence);
-                                    multiSync->SendSeqSyncPacket(lastSequence, 0, 0);
-                                }
-                            }
-                            break;
-                        case START_MEDIA:
-                            if (lastMedia != "") {
-                                multiSync->StartSyncedMedia(lastMedia.c_str());
-                                multiSync->SyncSyncedMedia(lastMedia.c_str(), 0, 0);
-                                if (bridgeToLocal) {
-                                    multiSync->SendMediaSyncStartPacket(lastMedia);
-                                    multiSync->SendMediaSyncPacket(lastMedia, 0);
-                                }
-                            }
-                            break;
-                        case STOP_SEQUENCE:
-                            if (lastSequence != "") {
-                                multiSync->StopSyncedSequence(lastSequence.c_str());
-                                lastSequence = "";
-                                if (bridgeToLocal) {
-                                    multiSync->SendSeqSyncStopPacket(lastSequence);
-                                }
-                            }
-                            break;
-                        case STOP_MEDIA:
-                            if (lastMedia != "") {
-                                multiSync->StopSyncedMedia(lastMedia.c_str());
-                                lastMedia = "";
-                                if (bridgeToLocal) {
-                                    multiSync->SendMediaSyncStopPacket(lastMedia);
-                                }
-                            }
-                            break;
-                        case SYNC: {
-                                int frame;
-                                memcpy(&frame, &readBuffer[1], 4);
-                                float time;
-                                memcpy(&time, &readBuffer[5], 4);
-                            
-                                if (lastSequence != "") {
-                                    multiSync->SyncSyncedSequence(lastSequence.c_str(), frame, time);
-                                    if (bridgeToLocal) {
-                                        multiSync->SendSeqSyncPacket(lastSequence, frame, time);
-                                    }
-                                }
-                                if (lastMedia != "") {
-                                    multiSync->SyncSyncedMedia(lastMedia.c_str(), frame, time);
-                                    if (bridgeToLocal) {
-                                        multiSync->SendMediaSyncPacket(lastMedia, time);
-                                    }
-                                }
-                            }
-                            break;
-                        case BLANK:
-                            sequence->SendBlankingData();
-                            if (bridgeToLocal) {
-                                multiSync->SendBlankingDataPacket();
-                            }
-                            break;
-                        default:
-                            LogWarn(VB_SYNC, "Unknown command   cmd: %d    (%d bytes)\n", readBuffer[0], curPosition);
-                            break;
-                    }
-                    if (commandSize < curPosition) {
-                        memcpy(readBuffer, &readBuffer[commandSize],  curPosition - commandSize);
-                        curPosition -= commandSize;
-                    } else {
-                        curPosition = 0;
-                    }
-                    commandSize = 0;
-                }
-            } else {
-                LogExcess(VB_SYNC, "LoRa Callback -  no data read: %d   (%d bytes)\n", readBuffer[0], curPosition);
-            }
-            return false;
-        };
-        callbacks[devFile] = fn;
-    }
 
     bool loadSettings() {
         bool enabled = false;
@@ -464,24 +226,11 @@ public:
                 c.erase(std::remove( c.begin(), c.end(), '\"' ), c.end());
                 if (a == "LoRaEnable") {
                     enabled = (c == "1");
-                } else if (a == "LoRaBridgeEnable") {
-                    bridgeToLocal = (c == "1");
-                } else if (a == "LoRaDevicePort") {
-                    device = c;
-                } else if (a == "LoRaDeviceSpeed") {
-                    baud = std::stoi(c);
-                } else if (a == "LoRaMediaEnable") {
-                    sendMediaSync = std::stoi(c) != 0;
                 }
             }
         }
         return enabled;
     }
-    
-    int devFile = -1;
-    std::string device = "ttyUSB0";
-    int baud = 9600;
-    bool bridgeToLocal = false;
 
     std::string lastSequence;
     std::string lastMedia;
@@ -510,25 +259,11 @@ public:
     void registerApis(httpserver::webserver *m_ws) {
         //at this point, most of FPP is up and running, we can register our MultiSync plugin
         if (enabled && plugin->Init()) {
-            if (getFPPmode() == PLAYER_MODE) {
-                //only register the sender for master mode
-                multiSync->addMultiSyncPlugin(plugin);
-            }
+            //only register the sender for master mode
+            multiSync->addMultiSyncPlugin(plugin);
         } else {
             enabled = false;
-        }
-        m_ws->register_resource("/LoRa", plugin, true);
-        
-    }
-    
-    virtual void addControlCallbacks(std::map<int, std::function<bool(int)>> &callbacks) {
-        if (enabled && getFPPmode() == REMOTE_MODE) {
-            plugin->addControlCallbacks(callbacks);
-            if (plugin->bridgeToLocal) {
-                //if we're bridging the multisync, we need to have the control sockets open
-                multiSync->OpenControlSockets();
-            }
-        }
+        } 
     }
 };
 

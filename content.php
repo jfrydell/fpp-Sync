@@ -1,36 +1,3 @@
-<?
-$LoRaSpeeds = Array();
-$LoRaSpeeds['1200'] = '1200';
-$LoRaSpeeds['2400'] = '2400';
-$LoRaSpeeds['4800'] = '2400';
-$LoRaSpeeds['9600'] = '9600';
-$LoRaSpeeds['19200'] = '19200';
-$LoRaSpeeds['38400'] = '38400';
-$LoRaSpeeds['57600'] = '57600';
-$LoRaSpeeds['115200'] = '115200';
-
-$LoRaAirSpeeds = Array();
-$LoRaAirSpeeds['300'] = '300';
-$LoRaAirSpeeds['1200'] = '1200';
-$LoRaAirSpeeds['2400'] = '2400';
-$LoRaAirSpeeds['4800'] = '2400';
-$LoRaAirSpeeds['9600'] = '9600';
-$LoRaAirSpeeds['19200'] = '19200';
-
-$LoRaPorts = Array();
-foreach(scandir("/dev/") as $fileName) {
-    if ((preg_match("/^ttyS[0-9]+/", $fileName)) ||
-        (preg_match("/^ttyACM[0-9]+/", $fileName)) ||
-        (preg_match("/^ttyO[0-9]/", $fileName)) ||
-        (preg_match("/^ttyS[0-9]/", $fileName)) ||
-        (preg_match("/^ttyAMA[0-9]+/", $fileName)) ||
-        (preg_match("/^ttyUSB[0-9]+/", $fileName))) {
-        $LoRaPorts[$fileName] = $fileName;
-    }
-}
-?>
-
-
 <div id="global" class="settings">
 <fieldset>
 <legend>LoRa MultiSync Configuration</legend>
@@ -46,12 +13,6 @@ low (M1 and M2) jumpers are in place on the E15-USB-T2).
 If FPP is in Master mode, it will send MultiSync packets out.   If in Remote mode, it will listen for packets.
 <p>
 These setting much match what the module has been configured to use.<br>
-Port:  <? PrintSettingSelect("Port", "LoRaDevicePort", 1, 0, 'ttyUSB0', $LoRaPorts, "fpp-LoRa") ?>
-&nbsp; Baud Rate: <? PrintSettingSelect("Speed", "LoRaDeviceSpeed", 1, 0, '9600', $LoRaSpeeds, "fpp-LoRa") ?>
-<p>
-Send media sync packets: <? PrintSettingCheckbox("Enable LoRa Media", "LoRaMediaEnable", 1, 0, "1", "0", "fpp-LoRa", "", "1"); ?>
-<br>
-Bridge to local network: <? PrintSettingCheckbox("Enable LoRa Bridge", "LoRaBridgeEnable", 1, 0, "1", "0", "fpp-LoRa"); ?>
 <p>
 The LoRa protocol is very slow, it defaults to 2400 baud over the air.   At the start of each sequence, we have to send the
 filenames for the sequence and the media which can take time.  If you know the remotes will not need the media filenames, turn
