@@ -48,12 +48,12 @@ public:
     virtual ~SyncMultiSyncPlugin() {}
 
     bool Init() {
-        LogWarn(VB_SYNC, "Started thing!");
+        LogWarn(VB_SYNC, "Started thing!\n");
         return true;
     }
 
     void send(char *buf, int len) {
-        LogWarn(VB_SYNC, "Sending data WOW!");
+        LogWarn(VB_SYNC, "Sending data WOW!\n");
         CURL *curl;
         curl = curl_easy_init();
         if(curl) {
@@ -66,6 +66,7 @@ public:
     }
     
     void SendSync(uint32_t frames, float seconds) {
+        LogWarn(VB_SYNC, "SendSync\n");
         int diff = frames - lastSentFrame;
         float diffT = seconds - lastSentTime;
         bool sendSync = false;
@@ -96,6 +97,7 @@ public:
     }
 
     virtual void SendSeqOpenPacket(const std::string &filename) override {
+        LogWarn(VB_SYNC, "SendSeqOpenPacket\n");
         char buf[256];
         strcpy(&buf[1], filename.c_str());
         buf[0] = SET_SEQUENCE_NAME;
@@ -106,6 +108,7 @@ public:
         lastSentFrame = -1;
     }
     virtual void SendSeqSyncStartPacket(const std::string &filename) override {
+        LogWarn(VB_SYNC, "SendSeqSyncStartPacket\n");
         if (filename != lastSequence) {
             SendSeqOpenPacket(filename);
         }
@@ -117,6 +120,7 @@ public:
         lastSentFrame = -1;
     }
     virtual void SendSeqSyncStopPacket(const std::string &filename) override {
+        LogWarn(VB_SYNC, "SendSeqSyncStopPacket\n");
         char buf[2];
         buf[0] = STOP_SEQUENCE;
         send(buf, 1);
@@ -126,6 +130,7 @@ public:
         lastSentFrame = -1;
     }
     virtual void SendSeqSyncPacket(const std::string &filename, int frames, float seconds) override {
+        LogWarn(VB_SYNC, "SendSeqSyncPacket\n");
         if (filename != lastSequence) {
             SendSeqSyncStartPacket(filename);
         }
@@ -133,6 +138,7 @@ public:
     }
     
     virtual void SendMediaOpenPacket(const std::string &filename) override {
+        LogWarn(VB_SYNC, "SendMediaOpenPacket\n");
         if (sendMediaSync) {
             char buf[256];
             strcpy(&buf[1], filename.c_str());
@@ -145,6 +151,7 @@ public:
         }
     }
     virtual void SendMediaSyncStartPacket(const std::string &filename) override {
+        LogWarn(VB_SYNC, "SendMediaSyncStartPacket\n");
         if (sendMediaSync) {
             if (filename != lastMedia) {
                 SendSeqOpenPacket(filename);
@@ -158,6 +165,7 @@ public:
         }
     }
     virtual void SendMediaSyncStopPacket(const std::string &filename) override {
+        LogWarn(VB_SYNC, "SendMediaSyncStopPacket\n");
         if (sendMediaSync) {
             char buf[2];
             buf[0] = STOP_MEDIA;
@@ -169,6 +177,7 @@ public:
         }
     }
     virtual void SendMediaSyncPacket(const std::string &filename, float seconds) override {
+        LogWarn(VB_SYNC, "SendMediaSyncPacket\n");
         if (sendMediaSync) {
             if (filename != lastMedia) {
                 SendMediaSyncStartPacket(filename);
@@ -178,6 +187,7 @@ public:
     }
     
     virtual void SendBlankingDataPacket(void) override {
+        LogWarn(VB_SYNC, "SendBlankingDataPacket\n");
         char buf[2];
         buf[0] = BLANK;
         send(buf, 1);
@@ -265,7 +275,8 @@ public:
             multiSync->addMultiSyncPlugin(plugin);
         } else {
             enabled = false;
-        } 
+        }
+        m_ws->register_resource("/LoRa", plugin, true);
     }
 };
 
