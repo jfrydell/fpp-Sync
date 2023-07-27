@@ -276,7 +276,6 @@ public:
         } else {
             enabled = false;
         }
-        m_ws->register_resource("/Sync", plugin, true);
     }
 };
 
