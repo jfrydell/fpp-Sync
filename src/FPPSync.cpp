@@ -65,7 +65,7 @@ public:
         if (curl) {
             std::string body = SaveJsonToString(req, std::string());
             LogDebug(VB_SYNC, "Sending: %s\n", body.c_str());
-            curl_easy_setopt(curl, CURLOPT_URL, "192.168.168.230:9000");
+            curl_easy_setopt(curl, CURLOPT_URL, "fpp.fletchrydell.com");
             curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
             struct curl_slist *hs = NULL;
             hs = curl_slist_append(hs, "Content-Type: application/json");
