@@ -72,7 +72,7 @@ public:
             curl_easy_setopt(curl, CURLOPT_HTTPHEADER, hs);
             curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, body.length());
             curl_easy_setopt(curl, CURLOPT_COPYPOSTFIELDS, body.c_str());
-            CurlManager::INSTANCE.addCURL(curl, std::bind(&SyncMultiSyncPlugin::callback, this, std::placeholders::_1));
+            CurlManager::INSTANCE.addCURL(std::string("fpp.fletchrydell.com"), curl, std::bind(&SyncMultiSyncPlugin::callback, this, std::placeholders::_1), true);
         } else {
             LogErr(VB_SYNC, "CURL init failed\n");
         }
